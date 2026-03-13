@@ -68,21 +68,48 @@ function detectGenericLogin() {
   for (const pwField of passwordFields) {
     if (!isVisible(pwField)) continue;
 
-    const form = pwField.closest('form') || pwField.parentElement;
-    if (!form) continue;
+    const form = pwField.closest('form');
+    const container = form || pwField.parentElement;
+    if (!container) continue;
 
-    const emailField = form.querySelector(
+    // Broad email/username field detection — try many common patterns
+    const emailField = container.querySelector(
       'input[type="email"], input[type="text"][name*="user"], input[type="text"][name*="email"], ' +
       'input[type="text"][name*="login"], input[type="text"][autocomplete="username"], ' +
-      'input[type="text"][autocomplete="email"], input[name="identifier"], input[name="username"]'
+      'input[type="text"][autocomplete="email"], input[name="identifier"], input[name="username"], ' +
+      'input[name="login"]'
+    ) || container.querySelector(
+      // Fallback: any text/email input that appears before the password field
+      'input[type="text"], input[type="email"]'
     );
 
-    const submitBtn = form.querySelector(
-      'button[type="submit"], input[type="submit"], button:not([type])'
-    );
+    // Submit button detection — try form first, then broader search
+    let submitBtn = null;
+    if (form) {
+      submitBtn = form.querySelector(
+        'button[type="submit"], input[type="submit"], button:not([type])'
+      );
+    }
+    // Broader search: look for common submit buttons near the form
+    if (!submitBtn) {
+      submitBtn = document.querySelector(
+        'button[type="submit"], input[type="submit"]'
+      );
+    }
+    // Last resort: find a button whose text looks like a login action
+    if (!submitBtn) {
+      const allButtons = document.querySelectorAll('button');
+      for (const btn of allButtons) {
+        const text = btn.textContent.trim().toLowerCase();
+        if (['sign in', 'log in', 'login', 'submit', 'sign up', 'continue'].includes(text)) {
+          submitBtn = btn;
+          break;
+        }
+      }
+    }
 
     return {
-      form,
+      form: container,
       emailField: emailField || null,
       passwordField: pwField,
       submitButton: submitBtn || null,
@@ -304,10 +331,10 @@ async function injectGoogleMultiStep(login, accountEmail, password) {
     // Small delay for transition animation
     await new Promise((r) => setTimeout(r, 500));
 
-    // Lock and type password
-    lockField(pwField);
+    // Type password FIRST, then lock
     removeShowPasswordToggle();
     await typeText(pwField, password);
+    lockField(pwField);
 
     // Find and click the password submit button
     const pwSubmit = document.querySelector('#passwordNext, button[type="submit"]');
@@ -324,10 +351,10 @@ async function injectGoogleMultiStep(login, accountEmail, password) {
   }
 
   if (login.step === 'password') {
-    // Already on password step
-    lockField(login.passwordField);
+    // Already on password step — type first, then lock
     removeShowPasswordToggle();
     await typeText(login.passwordField, password);
+    lockField(login.passwordField);
 
     if (login.submitButton) {
       clickSubmit(login.submitButton);
@@ -350,9 +377,15 @@ async function injectGenericForm(login, accountEmail, password) {
     lockField(login.emailField);
   }
 
-  // Type password
-  lockField(login.passwordField);
+  // Small delay between fields (some forms need this)
+  await new Promise((r) => setTimeout(r, 200));
+
+  // Type password FIRST, then lock (lockField's Object.defineProperty can interfere with value setters)
   await typeText(login.passwordField, password);
+  lockField(login.passwordField);
+
+  // Small delay before submit
+  await new Promise((r) => setTimeout(r, 300));
 
   // Auto-submit
   let submitted = false;
@@ -364,7 +397,7 @@ async function injectGenericForm(login, accountEmail, password) {
   setTimeout(() => {
     cleanupField(login.passwordField);
     if (login.emailField) cleanupField(login.emailField);
-  }, 500);
+  }, 1000);
 
   return { ok: true, autoSubmitted: submitted };
 }
