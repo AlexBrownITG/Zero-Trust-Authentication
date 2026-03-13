@@ -39,9 +39,10 @@ function createTables(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       mac_address TEXT NOT NULL,
       hostname TEXT NOT NULL,
-      alias TEXT,
+      device_alias TEXT,
+      cert_fingerprint TEXT,
       registered_at TEXT NOT NULL,
-      last_seen_at TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active'
     );
 
@@ -49,12 +50,11 @@ function createTables(db: Database.Database): void {
 
     CREATE TABLE IF NOT EXISTS credentials (
       id TEXT PRIMARY KEY,
-      service_name TEXT NOT NULL,
-      username TEXT NOT NULL,
+      account_email TEXT NOT NULL,
       encrypted_password TEXT NOT NULL,
       iv TEXT NOT NULL,
       auth_tag TEXT NOT NULL,
-      created_at TEXT NOT NULL,
+      target_domain TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
 
@@ -62,6 +62,9 @@ function createTables(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       device_id TEXT NOT NULL,
       credential_id TEXT NOT NULL,
+      user_mac TEXT NOT NULL,
+      site_url TEXT NOT NULL,
+      hostname TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       requested_at TEXT NOT NULL,
       resolved_at TEXT,
@@ -76,13 +79,12 @@ function createTables(db: Database.Database): void {
 
     CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY,
-      timestamp TEXT NOT NULL,
       event_type TEXT NOT NULL,
-      device_id TEXT,
-      credential_id TEXT,
       request_id TEXT,
-      actor TEXT,
-      details TEXT
+      device_id TEXT,
+      admin_id TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      timestamp TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_log(device_id);

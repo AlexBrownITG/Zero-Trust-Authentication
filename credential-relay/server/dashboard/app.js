@@ -38,27 +38,23 @@
 
   function handleMessage(msg) {
     switch (msg.type) {
-      case 'request.new':
+      case 'new_request':
         requests[msg.payload.id] = msg.payload;
         renderRequests();
         break;
-      case 'request.approved':
-      case 'request.rejected':
-      case 'request.relayed':
-      case 'request.completed':
-      case 'request.expired':
+      case 'request_resolved':
         if (requests[msg.payload.id || msg.payload.requestId]) {
           var id = msg.payload.id || msg.payload.requestId;
           if (msg.payload.status) {
             requests[id].status = msg.payload.status;
-          } else {
-            // derive from type
-            requests[id].status = msg.type.replace('request.', '');
+          }
+          if (msg.payload.resolvedBy) {
+            requests[id].resolvedBy = msg.payload.resolvedBy;
           }
           renderRequests();
         }
         break;
-      case 'agent.status':
+      case 'agent_status':
         if (msg.payload.connectedAgents) {
           connectedAgents = new Set(msg.payload.connectedAgents);
         } else if (msg.payload.status === 'connected') {
@@ -113,11 +109,13 @@
       card.className = 'request-card';
 
       var status = r.status || 'pending';
-      var heading = (r.serviceName || r.credentialId || 'Unknown') + ' → ' + (r.deviceAlias || r.deviceHostname || r.deviceId || 'Unknown');
+      var target = r.targetDomain || r.siteUrl || 'Unknown';
+      var heading = escapeHtml(r.hostname || r.deviceAlias || r.deviceId || 'Unknown') + ' → ' + escapeHtml(target);
 
       card.innerHTML =
-        '<h3>' + escapeHtml(heading) + ' <span class="badge ' + status + '">' + status + '</span></h3>' +
-        '<p>Username: ' + escapeHtml(r.username || 'N/A') + '</p>' +
+        '<h3>' + heading + ' <span class="badge ' + status + '">' + status + '</span></h3>' +
+        '<p>Account: ' + escapeHtml(r.accountEmail || 'N/A') + '</p>' +
+        '<p>Site URL: ' + escapeHtml(r.siteUrl || 'N/A') + '</p>' +
         '<p>Request ID: ' + escapeHtml(r.id) + '</p>' +
         '<p>Requested: ' + escapeHtml(r.requestedAt || '') + '</p>';
 

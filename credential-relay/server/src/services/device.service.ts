@@ -6,9 +6,10 @@ interface DeviceRow {
   id: string;
   mac_address: string;
   hostname: string;
-  alias: string | null;
+  device_alias: string | null;
+  cert_fingerprint: string | null;
   registered_at: string;
-  last_seen_at: string;
+  last_seen: string;
   status: string;
 }
 
@@ -17,9 +18,10 @@ function rowToDevice(row: DeviceRow): Device {
     id: row.id,
     macAddress: row.mac_address,
     hostname: row.hostname,
-    alias: row.alias || undefined,
+    deviceAlias: row.device_alias || undefined,
+    certFingerprint: row.cert_fingerprint || undefined,
     registeredAt: row.registered_at,
-    lastSeenAt: row.last_seen_at,
+    lastSeen: row.last_seen,
     status: row.status as DeviceStatus,
   };
 }
@@ -32,37 +34,37 @@ export function registerDevice(data: DeviceRegistration): Device {
   const existing = db.prepare('SELECT * FROM devices WHERE mac_address = ?').get(data.macAddress) as DeviceRow | undefined;
   if (existing) {
     // Update last seen and re-activate
-    db.prepare('UPDATE devices SET hostname = ?, alias = ?, last_seen_at = ?, status = ? WHERE id = ?')
-      .run(data.hostname, data.alias || null, now, 'active', existing.id);
+    db.prepare('UPDATE devices SET hostname = ?, device_alias = ?, last_seen = ?, status = ? WHERE id = ?')
+      .run(data.hostname, data.deviceAlias || null, now, 'active', existing.id);
 
     writeAuditLog({
-      eventType: 'device.updated',
+      eventType: 'device_updated',
       deviceId: existing.id,
-      details: `Device re-registered: ${data.hostname}`,
+      metadata: { hostname: data.hostname, action: 're-registered' },
     });
 
-    return rowToDevice({ ...existing, hostname: data.hostname, alias: data.alias || null, last_seen_at: now, status: 'active' });
+    return rowToDevice({ ...existing, hostname: data.hostname, device_alias: data.deviceAlias || null, last_seen: now, status: 'active' });
   }
 
   const id = generateId();
   db.prepare(`
-    INSERT INTO devices (id, mac_address, hostname, alias, registered_at, last_seen_at, status)
+    INSERT INTO devices (id, mac_address, hostname, device_alias, registered_at, last_seen, status)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.macAddress, data.hostname, data.alias || null, now, now, 'active');
+  `).run(id, data.macAddress, data.hostname, data.deviceAlias || null, now, now, 'active');
 
   writeAuditLog({
-    eventType: 'device.registered',
+    eventType: 'device_registered',
     deviceId: id,
-    details: `Device registered: ${data.hostname} (${data.macAddress})`,
+    metadata: { hostname: data.hostname, macAddress: data.macAddress },
   });
 
   return {
     id,
     macAddress: data.macAddress,
     hostname: data.hostname,
-    alias: data.alias,
+    deviceAlias: data.deviceAlias,
     registeredAt: now,
-    lastSeenAt: now,
+    lastSeen: now,
     status: 'active',
   };
 }
@@ -81,5 +83,5 @@ export function getDeviceById(id: string): Device | null {
 
 export function updateDeviceLastSeen(id: string): void {
   const db = getDb();
-  db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(new Date().toISOString(), id);
 }

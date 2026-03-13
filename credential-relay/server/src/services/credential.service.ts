@@ -1,5 +1,5 @@
 import {
-  Credential,
+  StoredCredential,
   CredentialMetadata,
   CreateCredential,
   UpdateCredential,
@@ -12,24 +12,22 @@ import { writeAuditLog } from './audit.service';
 
 interface CredentialRow {
   id: string;
-  service_name: string;
-  username: string;
+  account_email: string;
   encrypted_password: string;
   iv: string;
   auth_tag: string;
-  created_at: string;
+  target_domain: string;
   updated_at: string;
 }
 
-function rowToCredential(row: CredentialRow): Credential {
+function rowToCredential(row: CredentialRow): StoredCredential {
   return {
     id: row.id,
-    serviceName: row.service_name,
-    username: row.username,
+    accountEmail: row.account_email,
     encryptedPassword: row.encrypted_password,
     iv: row.iv,
     authTag: row.auth_tag,
-    createdAt: row.created_at,
+    targetDomain: row.target_domain,
     updatedAt: row.updated_at,
   };
 }
@@ -37,9 +35,8 @@ function rowToCredential(row: CredentialRow): Credential {
 function rowToMetadata(row: CredentialRow): CredentialMetadata {
   return {
     id: row.id,
-    serviceName: row.service_name,
-    username: row.username,
-    createdAt: row.created_at,
+    accountEmail: row.account_email,
+    targetDomain: row.target_domain,
     updatedAt: row.updated_at,
   };
 }
@@ -52,17 +49,16 @@ export function createCredential(data: CreateCredential): CredentialMetadata {
   const encrypted = encrypt(data.password, config.vaultMasterKey);
 
   db.prepare(`
-    INSERT INTO credentials (id, service_name, username, encrypted_password, iv, auth_tag, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.serviceName, data.username, encrypted.ciphertext, encrypted.iv, encrypted.authTag, now, now);
+    INSERT INTO credentials (id, account_email, encrypted_password, iv, auth_tag, target_domain, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.accountEmail, encrypted.ciphertext, encrypted.iv, encrypted.authTag, data.targetDomain, now);
 
   writeAuditLog({
-    eventType: 'credential.created',
-    credentialId: id,
-    details: `Credential created for ${data.serviceName} (${data.username})`,
+    eventType: 'credential_created',
+    metadata: { accountEmail: data.accountEmail, targetDomain: data.targetDomain },
   });
 
-  return { id, serviceName: data.serviceName, username: data.username, createdAt: now, updatedAt: now };
+  return { id, accountEmail: data.accountEmail, targetDomain: data.targetDomain, updatedAt: now };
 }
 
 export function updateCredential(id: string, data: UpdateCredential): CredentialMetadata | null {
@@ -71,8 +67,8 @@ export function updateCredential(id: string, data: UpdateCredential): Credential
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  const serviceName = data.serviceName || existing.service_name;
-  const username = data.username || existing.username;
+  const accountEmail = data.accountEmail || existing.account_email;
+  const targetDomain = data.targetDomain || existing.target_domain;
 
   let encryptedPassword = existing.encrypted_password;
   let iv = existing.iv;
@@ -86,26 +82,25 @@ export function updateCredential(id: string, data: UpdateCredential): Credential
   }
 
   db.prepare(`
-    UPDATE credentials SET service_name = ?, username = ?, encrypted_password = ?, iv = ?, auth_tag = ?, updated_at = ?
+    UPDATE credentials SET account_email = ?, encrypted_password = ?, iv = ?, auth_tag = ?, target_domain = ?, updated_at = ?
     WHERE id = ?
-  `).run(serviceName, username, encryptedPassword, iv, authTag, now, id);
+  `).run(accountEmail, encryptedPassword, iv, authTag, targetDomain, now, id);
 
   writeAuditLog({
-    eventType: 'credential.updated',
-    credentialId: id,
-    details: `Credential updated for ${serviceName}`,
+    eventType: 'credential_updated',
+    metadata: { accountEmail, targetDomain },
   });
 
-  return { id, serviceName, username, createdAt: existing.created_at, updatedAt: now };
+  return { id, accountEmail, targetDomain, updatedAt: now };
 }
 
 export function listCredentials(): CredentialMetadata[] {
   const db = getDb();
-  const rows = db.prepare('SELECT * FROM credentials ORDER BY created_at DESC').all() as CredentialRow[];
+  const rows = db.prepare('SELECT * FROM credentials ORDER BY updated_at DESC').all() as CredentialRow[];
   return rows.map(rowToMetadata);
 }
 
-export function getCredentialById(id: string): Credential | null {
+export function getCredentialById(id: string): StoredCredential | null {
   const db = getDb();
   const row = db.prepare('SELECT * FROM credentials WHERE id = ?').get(id) as CredentialRow | undefined;
   return row ? rowToCredential(row) : null;

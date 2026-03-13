@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
 import { createApp } from '../app';
-import { initDb, closeDb, getDb } from '../db/database';
+import { initDb, closeDb } from '../db/database';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -15,9 +15,9 @@ const TEST_DB_PATH = path.join(__dirname, '../../test-data/test.db');
 let server: http.Server;
 let baseUrl: string;
 
-function api(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {
+function api(method: string, urlPath: string, body?: unknown): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, baseUrl);
+    const url = new URL(urlPath, baseUrl);
     const req = http.request(url, { method, headers: { 'Content-Type': 'application/json' } }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
@@ -32,7 +32,6 @@ function api(method: string, path: string, body?: unknown): Promise<{ status: nu
 }
 
 beforeAll(async () => {
-  // Clean up any previous test db
   if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
 
   initDb(TEST_DB_PATH);
@@ -70,12 +69,14 @@ describe('Devices API', () => {
     const res = await api('POST', '/api/devices/register', {
       macAddress: 'AA:BB:CC:DD:EE:FF',
       hostname: 'test-host',
-      alias: 'dev-machine',
+      deviceAlias: 'dev-machine',
     });
     expect(res.status).toBe(201);
-    const data = res.data as { id: string; macAddress: string; hostname: string; status: string };
+    const data = res.data as { id: string; macAddress: string; hostname: string; deviceAlias: string; lastSeen: string; status: string };
     expect(data.id).toBeTruthy();
     expect(data.macAddress).toBe('AA:BB:CC:DD:EE:FF');
+    expect(data.deviceAlias).toBe('dev-machine');
+    expect(data.lastSeen).toBeTruthy();
     expect(data.status).toBe('active');
     deviceId = data.id;
   });
@@ -110,14 +111,15 @@ describe('Credentials API', () => {
 
   it('POST /api/credentials creates a credential', async () => {
     const res = await api('POST', '/api/credentials', {
-      serviceName: 'Google',
-      username: 'user@test.com',
+      accountEmail: 'user@test.com',
+      targetDomain: 'accounts.google.com',
       password: 'super-secret-123',
     });
     expect(res.status).toBe(201);
-    const data = res.data as { id: string; serviceName: string; username: string };
+    const data = res.data as { id: string; accountEmail: string; targetDomain: string };
     expect(data.id).toBeTruthy();
-    expect(data.serviceName).toBe('Google');
+    expect(data.accountEmail).toBe('user@test.com');
+    expect(data.targetDomain).toBe('accounts.google.com');
     // Password should NOT be in the response
     expect((data as Record<string, unknown>).password).toBeUndefined();
     expect((data as Record<string, unknown>).encryptedPassword).toBeUndefined();
@@ -125,21 +127,21 @@ describe('Credentials API', () => {
   });
 
   it('POST /api/credentials rejects missing fields', async () => {
-    const res = await api('POST', '/api/credentials', { serviceName: 'X' });
+    const res = await api('POST', '/api/credentials', { accountEmail: 'x@y.com' });
     expect(res.status).toBe(400);
   });
 
   it('PUT /api/credentials/:id updates a credential', async () => {
     const res = await api('PUT', `/api/credentials/${credentialId}`, {
-      username: 'updated@test.com',
+      accountEmail: 'updated@test.com',
     });
     expect(res.status).toBe(200);
-    expect((res.data as { username: string }).username).toBe('updated@test.com');
+    expect((res.data as { accountEmail: string }).accountEmail).toBe('updated@test.com');
   });
 
   it('PUT /api/credentials/:id returns 404 for missing credential', async () => {
     const res = await api('PUT', '/api/credentials/00000000-0000-0000-0000-000000000000', {
-      username: 'nope',
+      accountEmail: 'nope@test.com',
     });
     expect(res.status).toBe(404);
   });
@@ -165,7 +167,6 @@ describe('Requests API', () => {
   let requestId: string;
 
   beforeAll(async () => {
-    // Create a device and credential for request tests
     const devRes = await api('POST', '/api/devices/register', {
       macAddress: '11:22:33:44:55:66',
       hostname: 'req-test-host',
@@ -173,21 +174,31 @@ describe('Requests API', () => {
     deviceId = (devRes.data as { id: string }).id;
 
     const credRes = await api('POST', '/api/credentials', {
-      serviceName: 'Teams',
-      username: 'req-user@test.com',
+      accountEmail: 'req-user@test.com',
+      targetDomain: 'accounts.google.com',
       password: 'req-password-123',
     });
     credentialId = (credRes.data as { id: string }).id;
   });
 
-  it('POST /api/requests creates a request', async () => {
-    const res = await api('POST', '/api/requests', { deviceId, credentialId });
+  it('POST /api/requests creates a request with userMac, siteUrl, hostname', async () => {
+    const res = await api('POST', '/api/requests', {
+      deviceId,
+      credentialId,
+      siteUrl: 'https://accounts.google.com/signin',
+    });
     expect(res.status).toBe(201);
-    const data = res.data as { id: string; status: string; deviceId: string; credentialId: string; expiresAt: string };
+    const data = res.data as {
+      id: string; status: string; deviceId: string; credentialId: string;
+      userMac: string; siteUrl: string; hostname: string; expiresAt: string;
+    };
     expect(data.id).toBeTruthy();
     expect(data.status).toBe('pending');
     expect(data.deviceId).toBe(deviceId);
     expect(data.credentialId).toBe(credentialId);
+    expect(data.userMac).toBe('11:22:33:44:55:66');
+    expect(data.siteUrl).toBe('https://accounts.google.com/signin');
+    expect(data.hostname).toBe('req-test-host');
     expect(data.expiresAt).toBeTruthy();
     requestId = data.id;
   });
@@ -196,6 +207,7 @@ describe('Requests API', () => {
     const res = await api('POST', '/api/requests', {
       deviceId: '00000000-0000-0000-0000-000000000000',
       credentialId,
+      siteUrl: 'https://accounts.google.com/signin',
     });
     expect(res.status).toBe(404);
   });
@@ -227,7 +239,11 @@ describe('Requests API', () => {
   });
 
   it('POST + PATCH reject flow works', async () => {
-    const createRes = await api('POST', '/api/requests', { deviceId, credentialId });
+    const createRes = await api('POST', '/api/requests', {
+      deviceId,
+      credentialId,
+      siteUrl: 'https://accounts.google.com/signin',
+    });
     const id = (createRes.data as { id: string }).id;
 
     const res = await api('PATCH', `/api/requests/${id}`, {
@@ -240,11 +256,16 @@ describe('Requests API', () => {
 });
 
 describe('Audit API', () => {
-  it('GET /api/audit returns audit entries', async () => {
+  it('GET /api/audit returns audit entries with metadata object', async () => {
     const res = await api('GET', '/api/audit');
     expect(res.status).toBe(200);
-    const list = res.data as Array<{ eventType: string }>;
+    const list = res.data as Array<{ eventType: string; metadata: Record<string, unknown> }>;
     expect(list.length).toBeGreaterThan(0);
+    // Verify snake_case event types
+    for (const entry of list) {
+      expect(entry.eventType).toMatch(/^[a-z_]+$/);
+      expect(typeof entry.metadata).toBe('object');
+    }
     // Verify no plaintext credentials in audit
     for (const entry of list) {
       const str = JSON.stringify(entry);
@@ -262,6 +283,16 @@ describe('Audit API', () => {
     const list = res.data as Array<{ deviceId?: string }>;
     for (const entry of list) {
       expect(entry.deviceId).toBe(firstDevice.id);
+    }
+  });
+
+  it('audit entries use adminId field (not actor)', async () => {
+    const res = await api('GET', '/api/audit');
+    const list = res.data as Array<Record<string, unknown>>;
+    const approvalEntry = list.find((e) => e.eventType === 'request_approved');
+    if (approvalEntry) {
+      expect(approvalEntry.adminId).toBeTruthy();
+      expect(approvalEntry.actor).toBeUndefined();
     }
   });
 });

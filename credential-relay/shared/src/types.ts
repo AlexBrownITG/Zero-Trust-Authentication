@@ -4,50 +4,49 @@ export interface Device {
   id: string;
   macAddress: string;
   hostname: string;
-  alias?: string;
-  registeredAt: string;
-  lastSeenAt: string;
+  deviceAlias?: string;
+  certFingerprint?: string;       // Phase 6 — not used in MVP
+  registeredAt: string;           // ISO 8601
+  lastSeen: string;
   status: DeviceStatus;
 }
 
-export type DeviceStatus = 'active' | 'inactive' | 'revoked';
+export type DeviceStatus = 'active' | 'revoked';
 
 export interface DeviceRegistration {
   macAddress: string;
   hostname: string;
-  alias?: string;
+  deviceAlias?: string;
 }
 
-// ── Credential ──────────────────────────────────────────────────────────────
+// ── Credential (StoredCredential in plan.md) ────────────────────────────────
 
-export interface Credential {
+export interface StoredCredential {
   id: string;
-  serviceName: string;
-  username: string;
-  encryptedPassword: string;
-  iv: string;
-  authTag: string;
-  createdAt: string;
+  accountEmail: string;
+  encryptedPassword: string;      // AES-256-GCM ciphertext
+  iv: string;                     // Initialization vector
+  authTag: string;                // GCM auth tag
+  targetDomain: string;           // e.g. "accounts.google.com"
   updatedAt: string;
 }
 
 export interface CredentialMetadata {
   id: string;
-  serviceName: string;
-  username: string;
-  createdAt: string;
+  accountEmail: string;
+  targetDomain: string;
   updatedAt: string;
 }
 
 export interface CreateCredential {
-  serviceName: string;
-  username: string;
+  accountEmail: string;
+  targetDomain: string;
   password: string;
 }
 
 export interface UpdateCredential {
-  serviceName?: string;
-  username?: string;
+  accountEmail?: string;
+  targetDomain?: string;
   password?: string;
 }
 
@@ -56,11 +55,14 @@ export interface UpdateCredential {
 export interface CredentialRequest {
   id: string;
   deviceId: string;
-  credentialId: string;
+  credentialId: string;           // Links to StoredCredential
+  userMac: string;                // MAC of requesting device (captured at request time)
+  siteUrl: string;                // URL where credential is needed
+  hostname: string;               // Device hostname at request time
   status: RequestStatus;
   requestedAt: string;
   resolvedAt?: string;
-  resolvedBy?: string;
+  resolvedBy?: string;            // Admin who approved/rejected
   expiresAt: string;
 }
 
@@ -69,6 +71,7 @@ export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'relayed' | 'c
 export interface CreateCredentialRequest {
   deviceId: string;
   credentialId: string;
+  siteUrl: string;
 }
 
 export interface ResolveCredentialRequest {
@@ -78,42 +81,37 @@ export interface ResolveCredentialRequest {
 
 // ── Audit Log ───────────────────────────────────────────────────────────────
 
-export interface AuditLogEntry {
+export interface AuditEntry {
   id: string;
-  timestamp: string;
   eventType: AuditEventType;
-  deviceId?: string;
-  credentialId?: string;
   requestId?: string;
-  actor?: string;
-  details?: string;
+  deviceId?: string;
+  adminId?: string;
+  metadata: Record<string, unknown>;
+  timestamp: string;
 }
 
 export type AuditEventType =
-  | 'device.registered'
-  | 'device.updated'
-  | 'credential.created'
-  | 'credential.updated'
-  | 'request.created'
-  | 'request.approved'
-  | 'request.rejected'
-  | 'request.relayed'
-  | 'request.completed'
-  | 'request.expired'
-  | 'agent.connected'
-  | 'agent.disconnected';
+  | 'request_created'
+  | 'request_approved'
+  | 'request_rejected'
+  | 'credential_relayed'
+  | 'injection_confirmed'
+  | 'request_expired'
+  | 'device_registered'
+  | 'device_updated'
+  | 'credential_created'
+  | 'credential_updated'
+  | 'agent_connected'
+  | 'agent_disconnected';
 
 // ── WebSocket Messages ──────────────────────────────────────────────────────
 
 export type WsMessageType =
-  | 'request.new'
-  | 'request.approved'
-  | 'request.rejected'
-  | 'request.relayed'
-  | 'request.completed'
-  | 'request.expired'
-  | 'credential.payload'
-  | 'agent.status'
+  | 'new_request'
+  | 'request_resolved'
+  | 'credential_payload'
+  | 'agent_status'
   | 'error';
 
 export interface WsMessage {
@@ -125,8 +123,8 @@ export interface WsMessage {
 export interface CredentialPayload {
   requestId: string;
   credentialId: string;
-  serviceName: string;
-  username: string;
+  accountEmail: string;
+  targetDomain: string;
   encryptedPassword: string;
   iv: string;
   authTag: string;

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { validate } from '../middleware/validation';
 import { createRequestSchema, resolveRequestSchema } from './schemas';
-import { createRequest, listRequests, resolveRequest, getRequestById } from '../services/request.service';
+import { createRequest, listRequests, resolveRequest } from '../services/request.service';
 import { getDeviceById } from '../services/device.service';
 import { getCredentialById } from '../services/credential.service';
 import { broadcastToAdmins, sendToAgent } from '../ws/ws-server';
@@ -28,13 +28,12 @@ router.post('/', validate(createRequestSchema), (req: Request, res: Response) =>
 
     // Notify admin dashboard
     broadcastToAdmins({
-      type: 'request.new',
+      type: 'new_request',
       payload: {
         ...request,
-        deviceHostname: device.hostname,
-        deviceAlias: device.alias,
-        serviceName: credential.serviceName,
-        username: credential.username,
+        deviceAlias: device.deviceAlias,
+        accountEmail: credential.accountEmail,
+        targetDomain: credential.targetDomain,
       },
       timestamp: new Date().toISOString(),
     });
@@ -74,7 +73,7 @@ router.patch('/:id', validate(resolveRequestSchema), (req: Request, res: Respons
 
     // Broadcast status update to admin dashboard
     broadcastToAdmins({
-      type: action === 'approve' ? 'request.approved' : 'request.rejected',
+      type: 'request_resolved',
       payload: request,
       timestamp: new Date().toISOString(),
     });
@@ -84,12 +83,12 @@ router.patch('/:id', validate(resolveRequestSchema), (req: Request, res: Respons
       const credential = getCredentialById(request.credentialId);
       if (credential) {
         sendToAgent(request.deviceId, {
-          type: 'credential.payload',
+          type: 'credential_payload',
           payload: {
             requestId: request.id,
             credentialId: credential.id,
-            serviceName: credential.serviceName,
-            username: credential.username,
+            accountEmail: credential.accountEmail,
+            targetDomain: credential.targetDomain,
             encryptedPassword: credential.encryptedPassword,
             iv: credential.iv,
             authTag: credential.authTag,

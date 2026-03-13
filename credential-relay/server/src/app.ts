@@ -12,7 +12,7 @@ export function createApp(): express.Application {
   app.use(express.json());
 
   // Serve admin dashboard static files
-  app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
+  app.use('/dashboard', express.static(path.join(__dirname, '../dashboard')));
 
   // API routes
   app.use('/api/devices', deviceRoutes);

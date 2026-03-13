@@ -7,12 +7,16 @@ import {
   CREDENTIAL_REQUEST_TTL_MS,
 } from '@credential-relay/shared';
 import { getDb } from '../db/database';
+import { getDeviceById } from './device.service';
 import { writeAuditLog } from './audit.service';
 
 interface RequestRow {
   id: string;
   device_id: string;
   credential_id: string;
+  user_mac: string;
+  site_url: string;
+  hostname: string;
   status: string;
   requested_at: string;
   resolved_at: string | null;
@@ -25,6 +29,9 @@ function rowToRequest(row: RequestRow): CredentialRequest {
     id: row.id,
     deviceId: row.device_id,
     credentialId: row.credential_id,
+    userMac: row.user_mac,
+    siteUrl: row.site_url,
+    hostname: row.hostname,
     status: row.status as RequestStatus,
     requestedAt: row.requested_at,
     resolvedAt: row.resolved_at || undefined,
@@ -39,23 +46,30 @@ export function createRequest(data: CreateCredentialRequest): CredentialRequest 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + CREDENTIAL_REQUEST_TTL_MS);
 
+  // Look up device to capture MAC and hostname at request time
+  const device = getDeviceById(data.deviceId);
+  const userMac = device?.macAddress || '';
+  const hostname = device?.hostname || '';
+
   db.prepare(`
-    INSERT INTO credential_requests (id, device_id, credential_id, status, requested_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, data.deviceId, data.credentialId, 'pending', now.toISOString(), expiresAt.toISOString());
+    INSERT INTO credential_requests (id, device_id, credential_id, user_mac, site_url, hostname, status, requested_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.deviceId, data.credentialId, userMac, data.siteUrl, hostname, 'pending', now.toISOString(), expiresAt.toISOString());
 
   writeAuditLog({
-    eventType: 'request.created',
+    eventType: 'request_created',
     deviceId: data.deviceId,
-    credentialId: data.credentialId,
     requestId: id,
-    details: 'Credential request created',
+    metadata: { siteUrl: data.siteUrl, hostname },
   });
 
   return {
     id,
     deviceId: data.deviceId,
     credentialId: data.credentialId,
+    userMac,
+    siteUrl: data.siteUrl,
+    hostname,
     status: 'pending',
     requestedAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -94,10 +108,9 @@ export function resolveRequest(id: string, action: 'approve' | 'reject', resolve
   if (new Date(existing.expires_at) < new Date()) {
     updateRequestStatus(id, 'expired');
     writeAuditLog({
-      eventType: 'request.expired',
+      eventType: 'request_expired',
       requestId: id,
       deviceId: existing.device_id,
-      credentialId: existing.credential_id,
     });
     throw new Error('Request has expired');
   }
@@ -109,12 +122,11 @@ export function resolveRequest(id: string, action: 'approve' | 'reject', resolve
     .run(newStatus, now, resolvedBy, id);
 
   writeAuditLog({
-    eventType: action === 'approve' ? 'request.approved' : 'request.rejected',
+    eventType: action === 'approve' ? 'request_approved' : 'request_rejected',
     requestId: id,
     deviceId: existing.device_id,
-    credentialId: existing.credential_id,
-    actor: resolvedBy,
-    details: `Request ${action}d by ${resolvedBy}`,
+    adminId: resolvedBy,
+    metadata: { action, siteUrl: existing.site_url },
   });
 
   return {
@@ -129,10 +141,16 @@ export function updateRequestStatus(id: string, status: RequestStatus): void {
   const db = getDb();
   db.prepare('UPDATE credential_requests SET status = ? WHERE id = ?').run(status, id);
 
-  writeAuditLog({
-    eventType: `request.${status}` as AuditEventType,
-    requestId: id,
-  });
+  // Map status to audit event type
+  const eventMap: Partial<Record<RequestStatus, AuditEventType>> = {
+    relayed: 'credential_relayed',
+    completed: 'injection_confirmed',
+    expired: 'request_expired',
+  };
+  const eventType = eventMap[status];
+  if (eventType) {
+    writeAuditLog({ eventType, requestId: id });
+  }
 }
 
 export function expireOldRequests(): number {

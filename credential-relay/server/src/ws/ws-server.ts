@@ -46,14 +46,14 @@ function handleAgentConnection(ws: WebSocket, deviceId: string): void {
   updateDeviceLastSeen(deviceId);
 
   writeAuditLog({
-    eventType: 'agent.connected',
+    eventType: 'agent_connected',
     deviceId,
-    details: `Agent connected for device ${deviceId}`,
+    metadata: { deviceId },
   });
 
   // Notify admins of agent status
   broadcastToAdmins({
-    type: 'agent.status',
+    type: 'agent_status',
     payload: { deviceId, status: 'connected' },
     timestamp: new Date().toISOString(),
   });
@@ -72,13 +72,13 @@ function handleAgentConnection(ws: WebSocket, deviceId: string): void {
     agentConnections.delete(deviceId);
 
     writeAuditLog({
-      eventType: 'agent.disconnected',
+      eventType: 'agent_disconnected',
       deviceId,
-      details: `Agent disconnected for device ${deviceId}`,
+      metadata: { deviceId },
     });
 
     broadcastToAdmins({
-      type: 'agent.status',
+      type: 'agent_status',
       payload: { deviceId, status: 'disconnected' },
       timestamp: new Date().toISOString(),
     });
@@ -90,23 +90,24 @@ function handleAgentConnection(ws: WebSocket, deviceId: string): void {
 }
 
 function handleAgentMessage(deviceId: string, msg: WsMessage): void {
+  const payload = msg.payload as { requestId: string };
   switch (msg.type) {
-    case 'request.relayed': {
-      const { requestId } = msg.payload as { requestId: string };
-      updateRequestStatus(requestId, 'relayed');
+    case 'credential_payload': {
+      // Agent confirms relay — credential was delivered to extension via IPC
+      updateRequestStatus(payload.requestId, 'relayed');
       broadcastToAdmins({
-        type: 'request.relayed',
-        payload: { requestId, deviceId },
+        type: 'request_resolved',
+        payload: { requestId: payload.requestId, deviceId, status: 'relayed' },
         timestamp: new Date().toISOString(),
       });
       break;
     }
-    case 'request.completed': {
-      const { requestId } = msg.payload as { requestId: string };
-      updateRequestStatus(requestId, 'completed');
+    case 'request_resolved': {
+      // Agent confirms injection complete
+      updateRequestStatus(payload.requestId, 'completed');
       broadcastToAdmins({
-        type: 'request.completed',
-        payload: { requestId, deviceId },
+        type: 'request_resolved',
+        payload: { requestId: payload.requestId, deviceId, status: 'completed' },
         timestamp: new Date().toISOString(),
       });
       break;
@@ -123,7 +124,7 @@ function handleAdminConnection(ws: WebSocket): void {
   // Send current agent statuses
   const connectedAgents = Array.from(agentConnections.keys());
   ws.send(JSON.stringify({
-    type: 'agent.status',
+    type: 'agent_status',
     payload: { connectedAgents },
     timestamp: new Date().toISOString(),
   }));

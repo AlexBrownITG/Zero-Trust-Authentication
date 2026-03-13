@@ -14,14 +14,14 @@ logger.info('Seeding database...');
 const device = registerDevice({
   macAddress: '00:11:22:33:44:55',
   hostname: 'test-workstation',
-  alias: 'test-device',
+  deviceAlias: 'test-device',
 });
 logger.info({ deviceId: device.id }, 'Test device registered');
 
 // Create test credential
 const credential = createCredential({
-  serviceName: 'Google',
-  username: 'employee@company.com',
+  accountEmail: 'employee@company.com',
+  targetDomain: 'accounts.google.com',
   password: 'test-password-123',
 });
 logger.info({ credentialId: credential.id }, 'Test credential created');
