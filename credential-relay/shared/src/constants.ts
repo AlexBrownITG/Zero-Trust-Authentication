@@ -7,7 +7,7 @@ export const API_PREFIX = '/api';
 
 export const CREDENTIAL_REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export const CREDENTIAL_PLAINTEXT_TTL_MS = 10_000; // 10 seconds max in agent RAM
+export const CREDENTIAL_PLAINTEXT_TTL_MS = 60_000; // 60 seconds in agent RAM (increased for testing)
 
 export const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 export const ENCRYPTION_IV_LENGTH = 12;
