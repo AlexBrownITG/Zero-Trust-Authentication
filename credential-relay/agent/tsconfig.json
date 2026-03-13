@@ -2,7 +2,11 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "paths": {
+      "@credential-relay/shared": ["../shared/dist/index.d.ts"]
+    },
+    "baseUrl": "."
   },
   "include": ["src/**/*"],
   "references": [
