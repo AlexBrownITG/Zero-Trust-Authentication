@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@credential-relay/shared": "*",
+    "dotenv": "^16.4.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "ws": "^8.17.0"

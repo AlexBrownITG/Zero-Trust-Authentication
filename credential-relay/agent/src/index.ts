@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { collectDeviceIdentity } from './identity';
 import { registerWithServer } from './registration';
 import { AgentWsClient } from './ws-client';
