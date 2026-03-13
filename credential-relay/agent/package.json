@@ -1,0 +1,20 @@
+{
+  "name": "@credential-relay/agent",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@credential-relay/shared": "*",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.12.0"
+  }
+}

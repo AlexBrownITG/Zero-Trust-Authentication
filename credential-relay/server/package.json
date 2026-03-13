@@ -1,0 +1,27 @@
+{
+  "name": "@credential-relay/server",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@credential-relay/shared": "*",
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.19.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "dotenv": "^16.4.0",
+    "ws": "^8.17.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/express": "^4.17.21",
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.12.0"
+  }
+}

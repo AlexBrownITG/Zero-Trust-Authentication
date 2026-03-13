@@ -1,0 +1,26 @@
+{
+  "name": "credential-relay",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "agent",
+    "extension"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w shared",
+    "build:server": "npm run build -w server",
+    "build:agent": "npm run build -w agent",
+    "build": "npm run build:shared && npm run build:server && npm run build:agent",
+    "seed": "npm run build:shared && npm run build:server && node server/dist/seed.js",
+    "demo": "npm run build && concurrently --names server,agent --prefix-colors blue,green \"node server/dist/index.js\" \"node agent/dist/index.js --device-alias test-device\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

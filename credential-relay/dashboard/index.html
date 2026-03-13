@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credential Relay — Admin Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #38bdf8; }
+    .status { padding: 0.5rem 1rem; border-radius: 0.25rem; margin-bottom: 1rem; font-size: 0.875rem; }
+    .status.connected { background: #065f46; color: #6ee7b7; }
+    .status.disconnected { background: #7f1d1d; color: #fca5a5; }
+    #request-queue { margin-top: 1rem; }
+    .request-card { background: #1e293b; border: 1px solid #334155; border-radius: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; }
+    .request-card h3 { font-size: 1rem; color: #f8fafc; margin-bottom: 0.5rem; }
+    .request-card p { font-size: 0.8125rem; color: #94a3b8; margin-bottom: 0.25rem; }
+    .actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; font-size: 0.875rem; cursor: pointer; font-weight: 600; }
+    .btn-approve { background: #059669; color: white; }
+    .btn-approve:hover { background: #047857; }
+    .btn-reject { background: #dc2626; color: white; }
+    .btn-reject:hover { background: #b91c1c; }
+    .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge.pending { background: #d97706; color: #fff; }
+    .badge.approved { background: #059669; color: #fff; }
+    .badge.rejected { background: #dc2626; color: #fff; }
+    .badge.relayed { background: #2563eb; color: #fff; }
+    .badge.completed { background: #16a34a; color: #fff; }
+    .badge.expired { background: #6b7280; color: #fff; }
+    #agents { margin-bottom: 1.5rem; }
+    .agent-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; background: #065f46; color: #6ee7b7; margin-right: 0.5rem; }
+    .empty-state { color: #64748b; font-style: italic; padding: 2rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Credential Relay — Admin Dashboard</h1>
+  <div id="ws-status" class="status disconnected">WebSocket: Disconnected</div>
+
+  <h2 style="font-size:1.125rem; margin-bottom:0.5rem; color:#94a3b8;">Connected Agents</h2>
+  <div id="agents"><span class="empty-state">No agents connected</span></div>
+
+  <h2 style="font-size:1.125rem; margin-bottom:0.5rem; color:#94a3b8;">Credential Requests</h2>
+  <div id="request-queue"><div class="empty-state">No pending requests</div></div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
