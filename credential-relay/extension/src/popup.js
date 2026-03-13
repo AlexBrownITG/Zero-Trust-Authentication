@@ -156,10 +156,9 @@ function startPolling() {
         clearInterval(pollTimer);
         pollTimer = null;
 
-        // Show inject button
-        $('#waiting').classList.add('hidden');
-        $('#ready').classList.remove('hidden');
-        $('#inject-btn').onclick = () => consumeAndInject();
+        // Auto-inject immediately — no manual step needed
+        $('#waiting-status').textContent = 'Approved! Injecting credential...';
+        consumeAndInject();
       }
     } catch {
       // Agent not available, keep polling
@@ -179,10 +178,8 @@ function startPolling() {
 // --- Consume & Inject ---
 
 async function consumeAndInject() {
-  $('#inject-btn').disabled = true;
-
   try {
-    // Consume from agent
+    // Consume from agent (one-time read, credential is wiped after this)
     const res = await chrome.runtime.sendMessage({
       action: 'consume_credential',
       requestId: currentRequestId,
@@ -195,7 +192,7 @@ async function consumeAndInject() {
 
     const { accountEmail, password } = res.data;
 
-    // Send to content script to inject
+    // Send to content script to inject + auto-submit
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
       showResult('No active tab', false);
@@ -209,7 +206,16 @@ async function consumeAndInject() {
     });
 
     if (injectRes.ok) {
-      showResult('Credential injected successfully!', true);
+      // Send injection_confirmed back to background (audit trail)
+      chrome.runtime.sendMessage({
+        action: 'injection_confirmed',
+        requestId: currentRequestId,
+      }).catch(() => {}); // Best-effort
+
+      const msg = injectRes.autoSubmitted
+        ? 'Credential injected and submitted!'
+        : 'Credential injected! (manual submit may be needed)';
+      showResult(msg, true);
     } else {
       showResult(injectRes.error || 'Injection failed', false);
     }
@@ -222,7 +228,6 @@ async function consumeAndInject() {
 
 function showResult(message, success) {
   $('#waiting').classList.add('hidden');
-  $('#ready').classList.add('hidden');
   $('#credential-select').classList.add('hidden');
 
   const resultEl = $('#result');

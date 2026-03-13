@@ -14,7 +14,8 @@
     "build:agent": "npm run build -w agent",
     "build": "npm run build:shared && npm run build:server && npm run build:agent",
     "seed": "npm run build:shared && npm run build:server && node server/dist/seed.js",
-    "demo": "npm run build && concurrently --names server,agent --prefix-colors blue,green \"node server/dist/index.js\" \"node agent/dist/index.js --device-alias test-device\"",
+    "dev": "concurrently --names server,agent --prefix-colors blue,green \"npm run dev -w server\" \"npm run dev -w agent\"",
+    "demo": "npm run build && concurrently --names server,agent --prefix-colors blue,green \"node server/dist/index.js\" \"node agent/dist/index.js\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },

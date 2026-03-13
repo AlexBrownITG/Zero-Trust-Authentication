@@ -78,6 +78,12 @@ async function handleMessage(msg, sender) {
       return response;
     }
 
+    case 'injection_confirmed': {
+      // Fire-and-forget audit notification — don't fail the user flow
+      console.log('[credential-relay] Injection confirmed for request:', msg.requestId);
+      return { ok: true };
+    }
+
     case 'check_agent': {
       // Ping native host to verify agent connectivity
       try {

@@ -39,17 +39,11 @@
       <button id="request-btn" class="btn primary" disabled>Request Credential</button>
     </section>
 
-    <!-- Step 3: Waiting for approval -->
+    <!-- Step 3: Waiting for approval + auto-inject -->
     <section id="waiting" class="section hidden">
       <div class="spinner"></div>
-      <p>Waiting for admin approval...</p>
+      <p id="waiting-status">Waiting for admin approval...</p>
       <p class="request-id" id="waiting-request-id"></p>
-    </section>
-
-    <!-- Step 4: Ready to inject -->
-    <section id="ready" class="section hidden">
-      <p class="success">Credential approved!</p>
-      <button id="inject-btn" class="btn primary">Inject Credential</button>
     </section>
 
     <!-- Result -->
