@@ -1,10 +1,13 @@
 import { Router, Request, Response } from 'express';
+import { decrypt } from '@credential-relay/shared';
 import { validate } from '../middleware/validation';
 import { createRequestSchema, resolveRequestSchema } from './schemas';
-import { createRequest, listRequests, resolveRequest } from '../services/request.service';
+import { createRequest, listRequests, resolveRequest, getRequestById, updateRequestStatus } from '../services/request.service';
 import { getDeviceById } from '../services/device.service';
 import { getCredentialById } from '../services/credential.service';
 import { broadcastToAdmins, sendToAgent } from '../ws/ws-server';
+import { config } from '../config';
+import { writeAuditLog } from '../services/audit.service';
 
 const router = Router();
 
@@ -57,6 +60,83 @@ router.get('/', (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to list requests',
       code: 'REQUEST_LIST_FAILED',
+      details: (err as Error).message,
+    });
+  }
+});
+
+// Get a single request by ID (for extension polling)
+router.get('/:id', (req: Request, res: Response) => {
+  try {
+    const request = getRequestById(req.params.id);
+    if (!request) {
+      res.status(404).json({ error: 'Request not found', code: 'REQUEST_NOT_FOUND' });
+      return;
+    }
+    res.json(request);
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to get request',
+      code: 'REQUEST_GET_FAILED',
+      details: (err as Error).message,
+    });
+  }
+});
+
+// One-time credential fetch — decrypts and returns the credential for an approved/relayed request.
+// After fetching, marks the request as "completed" so it can't be fetched again.
+router.get('/:id/credential', (req: Request, res: Response) => {
+  try {
+    const request = getRequestById(req.params.id);
+    if (!request) {
+      res.status(404).json({ error: 'Request not found', code: 'REQUEST_NOT_FOUND' });
+      return;
+    }
+
+    // Only allow fetch for approved or relayed requests
+    if (request.status !== 'approved' && request.status !== 'relayed') {
+      res.status(409).json({
+        error: `Credential not available (request status: ${request.status})`,
+        code: 'CREDENTIAL_NOT_READY',
+      });
+      return;
+    }
+
+    const credential = getCredentialById(request.credentialId);
+    if (!credential) {
+      res.status(404).json({ error: 'Credential not found', code: 'CREDENTIAL_NOT_FOUND' });
+      return;
+    }
+
+    // Decrypt password server-side
+    const password = decrypt(
+      {
+        ciphertext: credential.encryptedPassword,
+        iv: credential.iv,
+        authTag: credential.authTag,
+      },
+      config.vaultMasterKey,
+    );
+
+    // Mark request as completed (one-time use)
+    updateRequestStatus(request.id, 'completed');
+
+    writeAuditLog({
+      eventType: 'injection_confirmed',
+      requestId: request.id,
+      deviceId: request.deviceId,
+      metadata: { method: 'direct_fetch' },
+    });
+
+    res.json({
+      accountEmail: credential.accountEmail,
+      password,
+      targetDomain: credential.targetDomain,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch credential',
+      code: 'CREDENTIAL_FETCH_FAILED',
       details: (err as Error).message,
     });
   }

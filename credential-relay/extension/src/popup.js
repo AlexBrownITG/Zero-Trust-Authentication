@@ -18,17 +18,18 @@ async function checkAgentStatus() {
   const statusText = $('#status-text');
 
   try {
-    const res = await chrome.runtime.sendMessage({ action: 'check_agent' });
-    if (res.ok && res.agentConnected) {
+    // Check server connectivity (the extension talks to the server directly now)
+    const res = await chrome.runtime.sendMessage({ action: 'get_devices' });
+    if (res.ok) {
       statusEl.className = 'status connected';
-      statusText.textContent = 'Agent connected';
+      statusText.textContent = 'Server connected';
     } else {
       statusEl.className = 'status disconnected';
-      statusText.textContent = 'Agent not connected';
+      statusText.textContent = 'Server error';
     }
   } catch {
     statusEl.className = 'status disconnected';
-    statusText.textContent = 'Agent not connected';
+    statusText.textContent = 'Server not connected';
   }
 }
 
@@ -139,31 +140,41 @@ async function requestCredential(siteUrl) {
   }
 }
 
-// --- Poll for Credential ---
+// --- Poll Server for Request Status ---
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
 
   pollTimer = setInterval(async () => {
     try {
-      const res = await chrome.runtime.sendMessage({ action: 'poll_agent' });
+      const res = await chrome.runtime.sendMessage({
+        action: 'poll_request_status',
+        requestId: currentRequestId,
+      });
       if (!res.ok) return;
 
-      const available = res.data || [];
-      const match = available.find((c) => c.requestId === currentRequestId);
+      const request = res.data;
 
-      if (match) {
+      // Request was approved (or already relayed to agent) — credential is ready
+      if (request.status === 'approved' || request.status === 'relayed') {
         clearInterval(pollTimer);
         pollTimer = null;
 
-        // Auto-inject immediately — no manual step needed
         $('#waiting-status').textContent = 'Approved! Injecting credential...';
-        consumeAndInject();
+        fetchAndInject();
+      } else if (request.status === 'rejected') {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        showResult('Request was rejected by admin', false);
+      } else if (request.status === 'expired') {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        showResult('Request expired', false);
       }
     } catch {
-      // Agent not available, keep polling
+      // Server not reachable, keep polling
     }
-  }, 1000);
+  }, 1500);
 
   // Stop polling after 5 minutes (request TTL)
   setTimeout(() => {
@@ -175,13 +186,13 @@ function startPolling() {
   }, 5 * 60 * 1000);
 }
 
-// --- Consume & Inject ---
+// --- Fetch Credential from Server & Inject ---
 
-async function consumeAndInject() {
+async function fetchAndInject() {
   try {
-    // Consume from agent (one-time read, credential is wiped after this)
+    // Fetch decrypted credential directly from server (one-time use)
     const res = await chrome.runtime.sendMessage({
-      action: 'consume_credential',
+      action: 'fetch_credential_direct',
       requestId: currentRequestId,
     });
 
@@ -206,12 +217,6 @@ async function consumeAndInject() {
     });
 
     if (injectRes.ok) {
-      // Send injection_confirmed back to background (audit trail)
-      chrome.runtime.sendMessage({
-        action: 'injection_confirmed',
-        requestId: currentRequestId,
-      }).catch(() => {}); // Best-effort
-
       const msg = injectRes.autoSubmitted
         ? 'Credential injected and submitted!'
         : 'Credential injected! (manual submit may be needed)';

@@ -63,25 +63,23 @@ async function handleMessage(msg, sender) {
       return { ok: true, data: request };
     }
 
-    case 'poll_agent': {
-      // Ask agent (via native host) for available credentials
-      const response = await sendNativeMessage({ action: 'list' });
-      return response;
+    case 'poll_request_status': {
+      // Poll server for request status (works without native messaging)
+      const res = await fetch(`${SERVER_URL}${API_PREFIX}/requests/${msg.requestId}`);
+      if (!res.ok) return { ok: false, error: `Status check failed: ${res.status}` };
+      const request = await res.json();
+      return { ok: true, data: request };
     }
 
-    case 'consume_credential': {
-      // Consume a credential from the agent
-      const response = await sendNativeMessage({
-        action: 'consume',
-        requestId: msg.requestId,
-      });
-      return response;
-    }
-
-    case 'injection_confirmed': {
-      // Fire-and-forget audit notification — don't fail the user flow
-      console.log('[credential-relay] Injection confirmed for request:', msg.requestId);
-      return { ok: true };
+    case 'fetch_credential_direct': {
+      // One-time credential fetch from server (bypasses native messaging)
+      const res = await fetch(`${SERVER_URL}${API_PREFIX}/requests/${msg.requestId}/credential`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return { ok: false, error: body.error || `Fetch failed: ${res.status}` };
+      }
+      const data = await res.json();
+      return { ok: true, data };
     }
 
     case 'check_agent': {
