@@ -1,0 +1,6 @@
+VAULT_MASTER_KEY=change-me-to-a-secure-random-key-at-least-32-chars
+ADMIN_PASSWORD=admin-secret-change-me
+JWT_SECRET=jwt-secret-change-me-to-random-string
+DB_PATH=./data/credential-relay.db
+LOG_LEVEL=info
+PORT=3000
